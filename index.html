@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>USATT Secure Cloud v12.3</title>
+    <style>
+        :root { --primary: #004a99; --win: #28a745; --loss: #dc3545; --bg: #f0f2f5; --admin: #673ab7; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 25px rgba(0,0,0,0.1); }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; background: #2c3e50; color: white; padding: 15px 25px; border-radius: 8px; margin-bottom: 20px; }
+        .cloud-badge { font-size: 0.8em; padding: 4px 10px; border-radius: 20px; font-weight: bold; background: #444; }
+        .online { background: var(--win); }
+        .view { display: none; }
+        .active { display: block; }
+        .admin-section { display: none; border: 2px dashed var(--admin); padding: 15px; border-radius: 10px; margin-bottom: 20px; background: #f3f0ff; }
+        .card { border: 1px solid #e1e4e8; padding: 20px; border-radius: 10px; margin-bottom: 20px; background: #fff; }
+        .flex { display: flex; gap: 20px; flex-wrap: wrap; }
+        button { padding: 8px 15px; cursor: pointer; border-radius: 6px; border: none; font-weight: 600; transition: 0.2s; }
+        .btn-main { background: var(--primary); color: white; }
+        .btn-admin { background: var(--admin); color: white; }
+        .btn-danger { background: var(--loss); color: white; }
+        .btn-file { background: #6c757d; color: white; }
+        input, select { padding: 12px; border: 1px solid #ced4da; border-radius: 6px; width: 100%; margin-bottom: 12px; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #edf2f7; }
+        .pid-tag { background: #edf2f7; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; }
+        .match-row { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fdfdfd; margin-bottom: 4px; border-left: 4px solid #ddd; }
+        .pts-badge { font-size: 0.85em; font-weight: bold; color: #666; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-bar">
+        <div><strong>USATT Secure Cloud</strong> <span id="cloud-status" class="cloud-badge">SYNCING...</span></div>
+        <div id="admin-controls">
+            <button onclick="promptAdmin()" class="btn-admin" id="adminBtn">Admin Access</button>
+            <button onclick="logoutAdmin()" class="btn-danger" id="logoutBtn" style="display:none">Lock System</button>
+        </div>
+    </div>
+
+    <div id="view-dashboard" class="view active">
+        <div class="card" id="public-reg">
+            <h3>Player Self-Registration</h3>
+            <div style="display:flex; gap:10px;">
+                <input type="text" id="reg-name" placeholder="Full Name" style="margin:0">
+                <input type="email" id="reg-email" placeholder="Email" style="margin:0">
+                <button class="btn-main" onclick="publicRegister()">Register</button>
+            </div>
+        </div>
+
+        <div class="admin-section" id="admin-tools">
+            <h3 style="color:var(--admin); margin-top:0;">🛡️ Security Terminal</h3>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input type="text" id="tName" placeholder="New Event Name" style="margin:0">
+                <button class="btn-main" onclick="createTournament()">Create Tournament</button>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn-file" onclick="syncFromCloud()">Refresh Data</button>
+                <button class="btn-file" onclick="exportDatabase()">Backup JSON</button>
+            </div>
+        </div>
+
+        <div class="flex">
+            <div class="card" style="flex: 2;">
+                <h2>Tournaments</h2>
+                <table id="tTable"><thead><tr><th>Event</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="card" style="flex: 1.5;">
+                <h2>Master Player List</h2>
+                <table id="pTable"><thead><tr><th>PID</th><th>Name</th><th>Rating</th><th class="admin-only" style="display:none">Actions</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-tourney" class="view">
+        <button onclick="showView('dashboard')" class="btn-file">← Back</button>
+        <h1 id="tourneyTitle"></h1>
+        <div class="admin-section" id="admin-event-tools">
+            <div class="flex">
+                <div style="flex:1">
+                    <h4>Add Player</h4>
+                    <select id="regSelect"></select>
+                    <button class="btn-main" onclick="registerPlayer()" style="width:100%; margin-top:5px">Add to Event</button>
+                </div>
+                <div style="flex:2">
+                    <h4>Add Match</h4>
+                    <div style="display:flex; gap:5px;"><select id="winSel"></select> def. <select id="lossSel"></select></div>
+                    <input type="text" id="mScore" placeholder="Score" style="margin-top:10px">
+                    <button class="btn-main" onclick="recordMatch()" style="width:100%; background:var(--win)">Post Result</button>
+                </div>
+            </div>
+            <button class="btn-admin" style="width:100%; margin-top:15px" onclick="finalizeTournament()">FINALIZE & SYNC RATINGS</button>
+        </div>
+        <div class="flex">
+            <div class="card" style="flex: 1;"><h3>Roster</h3><table id="rosterTable"><thead><tr><th>PID</th><th>Name</th><th>Seed</th></tr></thead><tbody></tbody></table></div>
+            <div class="card" style="flex: 1.5;"><h3>Match Log</h3><div id="matchLog"></div></div>
+        </div>
+        <div class="card"><h3>Standings Preview</h3><table id="summaryTable"><thead><tr><th>PID</th><th>Player</th><th>Start</th><th>Adj.</th><th>+/-</th><th>Final</th></tr></thead><tbody></tbody></table></div>
+    </div>
+</div>
+
+<script>
+    const DB_KEY = 'USATT_V12_3_SECURE';
+    const CLOUD_URL = "https://script.google.com/macros/s/AKfycbxTE7pKEBRmwgVQVhOVpqjiHhYsMWDLgeXQOrd5HS0N9tjvqSsbcd1nV82nE6i4xeMrbw/exec"; 
+
+    let db = JSON.parse(localStorage.getItem(DB_KEY)) || { players: [], tournaments: [], nextPid: 1000 };
+    let currentTId = null;
+    let isAdmin = false;
+    let sessionPassword = ""; // Kept in RAM only
+
+    const CHART = [{m:0,x:12,e:8,u:8},{m:13,x:37,e:7,u:10},{m:38,x:62,e:6,u:13},{m:63,x:87,e:5,u:16},{m:88,x:112,e:4,u:20},{m:113,x:137,e:3,u:25},{m:138,x:162,e:2,u:30},{m:163,x:187,e:2,u:35},{m:188,x:212,e:1,u:40},{m:213,x:237,e:1,u:45},{m:238,x:9999,e:0,u:50}];
+
+    async function save() {
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+        if (!sessionPassword) return; // Cannot save to cloud without password
+
+        try {
+            const response = await fetch(CLOUD_URL, {
+                method: "POST",
+                mode: "no-cors",
+                body: JSON.stringify({ password: sessionPassword, db: db })
+            });
+            document.getElementById('cloud-status').innerText = "ONLINE";
+            document.getElementById('cloud-status').classList.add('online');
+        } catch (e) {
+            document.getElementById('cloud-status').innerText = "SYNC ERROR";
+        }
+    }
+
+    async function syncFromCloud() {
+        try {
+            const res = await fetch(CLOUD_URL);
+            const data = await res.json();
+            if (data && data.players) { db = data; render(); }
+        } catch (e) { console.log("Fetch failed"); }
+    }
+
+    function promptAdmin() {
+        const p = prompt("Enter Admin Password:");
+        if(p) {
+            sessionPassword = p;
+            isAdmin = true;
+            document.getElementById('admin-tools').style.display = 'block';
+            document.getElementById('admin-event-tools').style.display = 'block';
+            document.getElementById('logoutBtn').style.display = 'inline-block';
+            document.getElementById('adminBtn').style.display = 'none';
+            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'table-cell');
+            render();
+            save(); // Try a save to check if password is correct
+        }
+    }
+
+    function logoutAdmin() {
+        isAdmin = false; sessionPassword = "";
+        location.reload(); 
+    }
+
+    function editPlayerRating(pid) {
+        const player = db.players.find(p => p.pid == pid);
+        const newRating = prompt(`Edit rating for ${player.name}:`, player.rating);
+        if (newRating) { player.rating = parseInt(newRating); save(); render(); }
+    }
+
+    function removePlayerFromSystem(pid) {
+        if (confirm("Delete player?")) { db.players = db.players.filter(p => p.pid != pid); save(); render(); }
+    }
+
+    function publicRegister() {
+        const name = document.getElementById('reg-name').value.trim();
+        if(!name) return;
+        const pid = db.nextPid++;
+        db.players.push({ pid, name, rating: 200, email: document.getElementById('reg-email').value });
+        document.getElementById('reg-name').value = '';
+        save(); render();
+    }
+
+    function getPts(spread, upset) {
+        const row = CHART.find(r => spread >= r.m && spread <= r.x);
+        return upset ? row.u : row.e;
+    }
+
+    function render() {
+        document.querySelector('#tTable tbody').innerHTML = db.tournaments.map(t => `
+            <tr><td>${t.name}</td><td>${t.finalized?'Finalized':'Open'}</td>
+            <td><button class="btn-main" onclick="openTourney(${t.id})">Open</button></td></tr>`).join('');
+        
+        document.querySelector('#pTable tbody').innerHTML = db.players.slice().sort((a,b)=>b.rating-a.rating).map(p => `
+            <tr><td><span class="pid-tag">${p.pid}</span></td><td>${p.name}</td><td>${p.rating}</td>
+            <td class="admin-only" style="display:${isAdmin?'table-cell':'none'}">
+                <button class="btn-file" onclick="editPlayerRating(${p.pid})">EDIT</button>
+                <button class="btn-danger" onclick="removePlayerFromSystem(${p.pid})">DEL</button>
+            </td></tr>`).join('');
+
+        if(currentTId) {
+            const t = db.tournaments.find(x => x.id === currentTId);
+            document.getElementById('tourneyTitle').innerText = t.name;
+            document.getElementById('regSelect').innerHTML = db.players.map(p => `<option value="${p.pid}">${p.name}</option>`).join('');
+            document.querySelector('#rosterTable tbody').innerHTML = t.roster.map(r => `<tr><td>${r.pid}</td><td>${r.name}</td><td>${r.initial}</td></tr>`).join('');
+            
+            const rOpts = t.roster.map(r => `<option value="${r.pid}">${r.name}</option>`).join('');
+            document.getElementById('winSel').innerHTML = rOpts; document.getElementById('lossSel').innerHTML = rOpts;
+
+            let pass1 = {}; t.roster.forEach(r => pass1[r.pid] = 0);
+            t.matches.forEach(m => {
+                const wR = t.roster.find(r => r.pid == m.wId).initial;
+                const lR = t.roster.find(r => r.pid == m.lId).initial;
+                const pts = getPts(Math.abs(wR - lR), wR < lR);
+                pass1[m.wId] += pts; pass1[m.lId] -= pts;
+            });
+
+            let adjStart = {};
+            t.roster.forEach(r => {
+                if(pass1[r.pid] >= 75) {
+                    const wins = t.matches.filter(m => m.wId == r.pid).map(m => t.roster.find(o => o.pid == m.lId).initial);
+                    const loss = t.matches.filter(m => m.lId == r.pid).map(m => t.roster.find(o => o.pid == m.wId).initial);
+                    if(loss.length === 0) {
+                        const s = [...wins].sort((a,b)=>a-b);
+                        adjStart[r.pid] = s.length % 2 !== 0 ? s[Math.floor(s.length/2)] : Math.round((s[s.length/2-1]+s[s.length/2])/2);
+                    } else adjStart[r.pid] = Math.round((Math.max(...wins,0)+Math.min(...loss))/2);
+                } else adjStart[r.pid] = r.initial;
+            });
+
+            let pass3 = {}; t.roster.forEach(r => pass3[r.pid] = 0);
+            t.matches.forEach(m => {
+                const pts = getPts(Math.abs(adjStart[m.wId] - adjStart[m.lId]), adjStart[m.wId] < adjStart[m.lId]);
+                pass3[m.wId] += pts; pass3[m.lId] -= pts;
+            });
+
+            document.getElementById('matchLog').innerHTML = t.matches.slice().reverse().map(m => {
+                const p = getPts(Math.abs(adjStart[m.wId] - adjStart[m.lId]), adjStart[m.wId] < adjStart[m.lId]);
+                return `<div class="match-row"><span><strong>${t.roster.find(r=>r.pid==m.wId).name}</strong> def. ${t.roster.find(r=>r.pid==m.lId).name}</span><span class="pts-badge">${m.score} (+${p}/-${p})</span></div>`;
+            }).join('');
+
+            document.querySelector('#summaryTable tbody').innerHTML = t.roster.map(r => {
+                const diff = (adjStart[r.pid] - r.initial) + pass3[r.pid];
+                return `<tr><td>${r.pid}</td><td>${r.name}</td><td>${r.initial}</td><td>${adjStart[r.pid]}</td><td style="color:${diff>=0?'green':'red'}">${diff>=0?'+':''}${diff}</td><td><strong>${adjStart[r.pid] + pass3[r.pid]}</strong></td></tr>`;
+            }).join('');
+        }
+    }
+
+    function finalizeTournament() {
+        const t = db.tournaments.find(x => x.id === currentTId);
+        if(!confirm("Finalize?")) return;
+        document.querySelectorAll('#summaryTable tbody tr').forEach(row => {
+            const pid = row.cells[0].innerText;
+            const final = parseInt(row.cells[5].innerText);
+            db.players.find(p => p.pid == pid).rating = final;
+        });
+        t.finalized = true; save(); render();
+    }
+
+    function openTourney(id) { currentTId = id; showView('tourney'); render(); }
+    function showView(v) { document.querySelectorAll('.view').forEach(e=>e.classList.remove('active')); document.getElementById('view-'+v).classList.add('active'); }
+    function createTournament() { const n = document.getElementById('tName').value; if(n){ db.tournaments.push({id:Date.now(), name:n, roster:[], matches:[], finalized:false}); save(); render(); } }
+    function registerPlayer() { 
+        const pid = document.getElementById('regSelect').value;
+        const t = db.tournaments.find(x=>x.id===currentTId);
+        if(!t.roster.find(r=>r.pid==pid)) { const p = db.players.find(x=>x.pid==pid); t.roster.push({pid, name:p.name, initial:p.rating}); save(); render(); }
+    }
+    function recordMatch() {
+        const t = db.tournaments.find(x=>x.id===currentTId);
+        t.matches.push({wId: document.getElementById('winSel').value, lId: document.getElementById('lossSel').value, score: document.getElementById('mScore').value});
+        save(); render();
+    }
+    function exportDatabase() {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(db)], {type:'application/json'}));
+        a.download = 'USATT_Backup.json'; a.click();
+    }
+
+    syncFromCloud();
+    render();
+    setInterval(syncFromCloud, 60000); 
+</script>
+</body>
+</html>
