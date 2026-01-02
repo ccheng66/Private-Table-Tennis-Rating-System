@@ -2,14 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>USATT Secure Cloud v12.3</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USATT Secure Cloud v12.9</title>
     <style>
         :root { --primary: #004a99; --win: #28a745; --loss: #dc3545; --bg: #f0f2f5; --admin: #673ab7; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); margin: 0; padding: 15px; color: #333; }
         .container { max-width: 1200px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 25px rgba(0,0,0,0.1); }
         .header-bar { display: flex; justify-content: space-between; align-items: center; background: #2c3e50; color: white; padding: 15px 25px; border-radius: 8px; margin-bottom: 20px; }
-        .cloud-badge { font-size: 0.8em; padding: 4px 10px; border-radius: 20px; font-weight: bold; background: #444; }
-        .online { background: var(--win); }
+        .cloud-badge { font-size: 0.8em; padding: 4px 10px; border-radius: 20px; font-weight: bold; background: #666; }
+        .online { background: var(--win) !important; }
         .view { display: none; }
         .active { display: block; }
         .admin-section { display: none; border: 2px dashed var(--admin); padding: 15px; border-radius: 10px; margin-bottom: 20px; background: #f3f0ff; }
@@ -24,15 +25,17 @@
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #edf2f7; }
         .pid-tag { background: #edf2f7; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; }
-        .match-row { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fdfdfd; margin-bottom: 4px; border-left: 4px solid #ddd; }
+        .date-sub { font-size: 0.8em; color: #666; display: block; }
+        .match-row { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fdfdfd; margin-bottom: 4px; border-left: 4px solid #ddd; }
         .pts-badge { font-size: 0.85em; font-weight: bold; color: #666; }
+        .action-cell { display: flex; gap: 5px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header-bar">
-        <div><strong>USATT Secure Cloud</strong> <span id="cloud-status" class="cloud-badge">SYNCING...</span></div>
+        <div><strong>USATT Secure Cloud v12.9</strong> <span id="cloud-status" class="cloud-badge">OFFLINE</span></div>
         <div id="admin-controls">
             <button onclick="promptAdmin()" class="btn-admin" id="adminBtn">Admin Access</button>
             <button onclick="logoutAdmin()" class="btn-danger" id="logoutBtn" style="display:none">Lock System</button>
@@ -40,34 +43,33 @@
     </div>
 
     <div id="view-dashboard" class="view active">
-        <div class="card" id="public-reg">
+        <div class="card">
             <h3>Player Self-Registration</h3>
             <div style="display:flex; gap:10px;">
                 <input type="text" id="reg-name" placeholder="Full Name" style="margin:0">
-                <input type="email" id="reg-email" placeholder="Email" style="margin:0">
-                <button class="btn-main" onclick="publicRegister()">Register</button>
+                <input type="email" id="reg-email" placeholder="Email (Optional)" style="margin:0">
+                <button class="btn-main" onclick="publicRegister()">Join System</button>
             </div>
         </div>
 
         <div class="admin-section" id="admin-tools">
-            <h3 style="color:var(--admin); margin-top:0;">🛡️ Security Terminal</h3>
+            <h3 style="color:var(--admin); margin-top:0;">🛡️ Tournament Management</h3>
             <div style="display:flex; gap:10px; margin-bottom:15px;">
-                <input type="text" id="tName" placeholder="New Event Name" style="margin:0">
-                <button class="btn-main" onclick="createTournament()">Create Tournament</button>
+                <input type="text" id="tName" placeholder="Tournament Name" style="margin:0; flex:2;">
+                <input type="date" id="tDate" style="margin:0; flex:1;">
+                <button class="btn-main" onclick="createTournament()">Create Event</button>
             </div>
-            <div style="display:flex; gap:10px;">
-                <button class="btn-file" onclick="syncFromCloud()">Refresh Data</button>
-                <button class="btn-file" onclick="exportDatabase()">Backup JSON</button>
-            </div>
+            <button class="btn-file" onclick="initSystem()">Force Cloud Pull</button>
+            <button class="btn-file" onclick="exportDatabase()">Backup JSON</button>
         </div>
 
         <div class="flex">
             <div class="card" style="flex: 2;">
-                <h2>Tournaments</h2>
+                <h2>Tournaments (By Date)</h2>
                 <table id="tTable"><thead><tr><th>Event</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>
             </div>
             <div class="card" style="flex: 1.5;">
-                <h2>Master Player List</h2>
+                <h2>Global Player Rankings</h2>
                 <table id="pTable"><thead><tr><th>PID</th><th>Name</th><th>Rating</th><th class="admin-only" style="display:none">Actions</th></tr></thead><tbody></tbody></table>
             </div>
         </div>
@@ -76,202 +78,238 @@
     <div id="view-tourney" class="view">
         <button onclick="showView('dashboard')" class="btn-file">← Back</button>
         <h1 id="tourneyTitle"></h1>
+        <p id="tourneyDateHeader" style="margin-top:-15px; color:#666;"></p>
+        
         <div class="admin-section" id="admin-event-tools">
             <div class="flex">
                 <div style="flex:1">
-                    <h4>Add Player</h4>
+                    <h4>Roster Management</h4>
                     <select id="regSelect"></select>
                     <button class="btn-main" onclick="registerPlayer()" style="width:100%; margin-top:5px">Add to Event</button>
                 </div>
                 <div style="flex:2">
-                    <h4>Add Match</h4>
+                    <h4>Add Match Result</h4>
                     <div style="display:flex; gap:5px;"><select id="winSel"></select> def. <select id="lossSel"></select></div>
                     <input type="text" id="mScore" placeholder="Score" style="margin-top:10px">
                     <button class="btn-main" onclick="recordMatch()" style="width:100%; background:var(--win)">Post Result</button>
                 </div>
             </div>
-            <button class="btn-admin" style="width:100%; margin-top:15px" onclick="finalizeTournament()">FINALIZE & SYNC RATINGS</button>
+            <button class="btn-admin" style="width:100%; margin-top:15px; background: #d32f2f;" onclick="finalizeTournament()">FINALIZE & UPDATE GLOBAL RATINGS</button>
         </div>
+
         <div class="flex">
             <div class="card" style="flex: 1;"><h3>Roster</h3><table id="rosterTable"><thead><tr><th>PID</th><th>Name</th><th>Seed</th></tr></thead><tbody></tbody></table></div>
-            <div class="card" style="flex: 1.5;"><h3>Match Log</h3><div id="matchLog"></div></div>
+            <div class="card" style="flex: 1.5;">
+                <h3>Match Log</h3>
+                <div id="matchLog"></div>
+            </div>
         </div>
-        <div class="card"><h3>Standings Preview</h3><table id="summaryTable"><thead><tr><th>PID</th><th>Player</th><th>Start</th><th>Adj.</th><th>+/-</th><th>Final</th></tr></thead><tbody></tbody></table></div>
+        
+        <div class="card">
+            <h3>USATT 4-Pass Official Standing</h3>
+            <table id="summaryTable">
+                <thead><tr><th>PID</th><th>Player</th><th>Initial</th><th>Adj. Start</th><th>+/-</th><th>Final</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
 <script>
-    const DB_KEY = 'USATT_V12_3_SECURE';
-    const CLOUD_URL = "https://script.google.com/macros/s/AKfycbxTE7pKEBRmwgVQVhOVpqjiHhYsMWDLgeXQOrd5HS0N9tjvqSsbcd1nV82nE6i4xeMrbw/exec"; 
+    const DB_KEY = 'USATT_V12_9_SECURE';
+    const CLOUD_URL = "https://script.google.com/macros/s/AKfycbxScV6yyOwuruNhkaqR0xFmF4QnHI2UQJ7xUVhWEso-Juinwecxy8_IkjotQadTfg3vog/exec"; 
 
-    let db = JSON.parse(localStorage.getItem(DB_KEY)) || { players: [], tournaments: [], nextPid: 1000 };
+    let db = { players: [], tournaments: [], nextPid: 1000 };
     let currentTId = null;
     let isAdmin = false;
-    let sessionPassword = ""; // Kept in RAM only
+    let sessionPassword = "";
 
     const CHART = [{m:0,x:12,e:8,u:8},{m:13,x:37,e:7,u:10},{m:38,x:62,e:6,u:13},{m:63,x:87,e:5,u:16},{m:88,x:112,e:4,u:20},{m:113,x:137,e:3,u:25},{m:138,x:162,e:2,u:30},{m:163,x:187,e:2,u:35},{m:188,x:212,e:1,u:40},{m:213,x:237,e:1,u:45},{m:238,x:9999,e:0,u:50}];
 
-    async function save() {
-        localStorage.setItem(DB_KEY, JSON.stringify(db));
-        if (!sessionPassword) return; // Cannot save to cloud without password
-
+    // --- CLOUD & AUTH ---
+    async function promptAdmin() {
+        const p = prompt("Enter Admin Password:");
+        if(!p) return;
         try {
-            const response = await fetch(CLOUD_URL, {
-                method: "POST",
-                mode: "no-cors",
-                body: JSON.stringify({ password: sessionPassword, db: db })
-            });
-            document.getElementById('cloud-status').innerText = "ONLINE";
-            document.getElementById('cloud-status').classList.add('online');
-        } catch (e) {
-            document.getElementById('cloud-status').innerText = "SYNC ERROR";
-        }
+            const res = await fetch(`${CLOUD_URL}?action=login&pass=${encodeURIComponent(p)}`);
+            const result = await res.json();
+            if (result.success) {
+                sessionPassword = p; isAdmin = true;
+                document.getElementById('admin-tools').style.display = 'block';
+                document.getElementById('admin-event-tools').style.display = 'block';
+                document.getElementById('logoutBtn').style.display = 'inline-block';
+                document.getElementById('adminBtn').style.display = 'none';
+                document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'table-cell');
+                render();
+            } else { alert("Access Denied."); }
+        } catch (e) { alert("Connectivity error."); }
     }
 
-    async function syncFromCloud() {
+    function logoutAdmin() { location.reload(); }
+
+    async function save() {
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+        if (!isAdmin || !sessionPassword) return;
+        try {
+            await fetch(CLOUD_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ password: sessionPassword, db: db }) });
+            document.getElementById('cloud-status').innerText = "CLOUD SYNCED";
+            document.getElementById('cloud-status').classList.add('online');
+        } catch (e) { document.getElementById('cloud-status').innerText = "SYNC ERROR"; }
+    }
+
+    async function initSystem() {
         try {
             const res = await fetch(CLOUD_URL);
             const data = await res.json();
-            if (data && data.players) { db = data; render(); }
-        } catch (e) { console.log("Fetch failed"); }
-    }
-
-    function promptAdmin() {
-        const p = prompt("Enter Admin Password:");
-        if(p) {
-            sessionPassword = p;
-            isAdmin = true;
-            document.getElementById('admin-tools').style.display = 'block';
-            document.getElementById('admin-event-tools').style.display = 'block';
-            document.getElementById('logoutBtn').style.display = 'inline-block';
-            document.getElementById('adminBtn').style.display = 'none';
-            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'table-cell');
-            render();
-            save(); // Try a save to check if password is correct
+            if (data && data.players) db = data;
+            document.getElementById('cloud-status').innerText = "CLOUD ONLINE";
+            document.getElementById('cloud-status').classList.add('online');
+        } catch (e) { 
+            const local = localStorage.getItem(DB_KEY);
+            if(local) db = JSON.parse(local);
         }
+        render();
     }
 
-    function logoutAdmin() {
-        isAdmin = false; sessionPassword = "";
-        location.reload(); 
-    }
-
-    function editPlayerRating(pid) {
-        const player = db.players.find(p => p.pid == pid);
-        const newRating = prompt(`Edit rating for ${player.name}:`, player.rating);
-        if (newRating) { player.rating = parseInt(newRating); save(); render(); }
-    }
-
-    function removePlayerFromSystem(pid) {
-        if (confirm("Delete player?")) { db.players = db.players.filter(p => p.pid != pid); save(); render(); }
-    }
-
-    function publicRegister() {
-        const name = document.getElementById('reg-name').value.trim();
-        if(!name) return;
-        const pid = db.nextPid++;
-        db.players.push({ pid, name, rating: 200, email: document.getElementById('reg-email').value });
-        document.getElementById('reg-name').value = '';
-        save(); render();
-    }
-
-    function getPts(spread, upset) {
+    // --- USATT 4-PASS ENGINE ---
+    function getPoints(spread, upset) {
         const row = CHART.find(r => spread >= r.m && spread <= r.x);
         return upset ? row.u : row.e;
     }
 
+    function calculateUSATT(t) {
+        let results = {};
+        t.roster.forEach(r => results[r.pid] = { initial: r.initial, p1G: 0, adj: r.initial, p3G: 0 });
+
+        // Pass 1
+        t.matches.forEach(m => {
+            const wR = results[m.wId].initial, lR = results[m.lId].initial;
+            const pts = getPoints(Math.abs(wR - lR), wR < lR);
+            results[m.wId].p1G += pts; results[m.lId].p1G -= pts;
+        });
+
+        // Pass 2 (Step-Up)
+        t.roster.forEach(r => {
+            if (results[r.pid].p1G >= 75) {
+                const wins = t.matches.filter(m => m.wId == r.pid).map(m => results[m.lId].initial);
+                const losses = t.matches.filter(m => m.lId == r.pid).map(m => results[m.wId].initial);
+                if (losses.length === 0) results[r.pid].adj = Math.max(...wins);
+                else results[r.pid].adj = Math.round((Math.max(...wins, 0) + Math.min(...losses)) / 2);
+            }
+        });
+
+        // Pass 3 (Adjusted Exchange)
+        t.matches.forEach(m => {
+            const wA = results[m.wId].adj, lA = results[m.lId].adj;
+            const pts = getPoints(Math.abs(wA - lA), wA < lA);
+            results[m.wId].p3G += pts; results[m.lId].p3G -= pts;
+        });
+        return results;
+    }
+
+    // --- RENDER ---
     function render() {
-        document.querySelector('#tTable tbody').innerHTML = db.tournaments.map(t => `
-            <tr><td>${t.name}</td><td>${t.finalized?'Finalized':'Open'}</td>
+        const sortedT = db.tournaments.slice().sort((a,b) => new Date(b.date) - new Date(a.date));
+        document.querySelector('#tTable tbody').innerHTML = sortedT.map(t => `
+            <tr><td><strong>${t.name}</strong><span class="date-sub">${t.date || 'TBD'}</span></td>
+            <td>${t.finalized?'Closed':'Active'}</td>
             <td><button class="btn-main" onclick="openTourney(${t.id})">Open</button></td></tr>`).join('');
         
         document.querySelector('#pTable tbody').innerHTML = db.players.slice().sort((a,b)=>b.rating-a.rating).map(p => `
             <tr><td><span class="pid-tag">${p.pid}</span></td><td>${p.name}</td><td>${p.rating}</td>
             <td class="admin-only" style="display:${isAdmin?'table-cell':'none'}">
-                <button class="btn-file" onclick="editPlayerRating(${p.pid})">EDIT</button>
-                <button class="btn-danger" onclick="removePlayerFromSystem(${p.pid})">DEL</button>
+                <div class="action-cell">
+                    <button class="btn-file" onclick="editRating(${p.pid})" style="padding:4px; font-size:10px;">EDIT</button>
+                    <button class="btn-danger" onclick="removePlayer(${p.pid})" style="padding:4px; font-size:10px;">DEL</button>
+                </div>
             </td></tr>`).join('');
 
         if(currentTId) {
             const t = db.tournaments.find(x => x.id === currentTId);
             document.getElementById('tourneyTitle').innerText = t.name;
-            document.getElementById('regSelect').innerHTML = db.players.map(p => `<option value="${p.pid}">${p.name}</option>`).join('');
+            document.getElementById('tourneyDateHeader').innerText = "Event Date: " + (t.date || 'Not set');
+            document.getElementById('regSelect').innerHTML = db.players.map(p => `<option value="${p.pid}">${p.name} (Live: ${p.rating})</option>`).join('');
             document.querySelector('#rosterTable tbody').innerHTML = t.roster.map(r => `<tr><td>${r.pid}</td><td>${r.name}</td><td>${r.initial}</td></tr>`).join('');
             
             const rOpts = t.roster.map(r => `<option value="${r.pid}">${r.name}</option>`).join('');
             document.getElementById('winSel').innerHTML = rOpts; document.getElementById('lossSel').innerHTML = rOpts;
 
-            let pass1 = {}; t.roster.forEach(r => pass1[r.pid] = 0);
-            t.matches.forEach(m => {
-                const wR = t.roster.find(r => r.pid == m.wId).initial;
-                const lR = t.roster.find(r => r.pid == m.lId).initial;
-                const pts = getPts(Math.abs(wR - lR), wR < lR);
-                pass1[m.wId] += pts; pass1[m.lId] -= pts;
-            });
-
-            let adjStart = {};
-            t.roster.forEach(r => {
-                if(pass1[r.pid] >= 75) {
-                    const wins = t.matches.filter(m => m.wId == r.pid).map(m => t.roster.find(o => o.pid == m.lId).initial);
-                    const loss = t.matches.filter(m => m.lId == r.pid).map(m => t.roster.find(o => o.pid == m.wId).initial);
-                    if(loss.length === 0) {
-                        const s = [...wins].sort((a,b)=>a-b);
-                        adjStart[r.pid] = s.length % 2 !== 0 ? s[Math.floor(s.length/2)] : Math.round((s[s.length/2-1]+s[s.length/2])/2);
-                    } else adjStart[r.pid] = Math.round((Math.max(...wins,0)+Math.min(...loss))/2);
-                } else adjStart[r.pid] = r.initial;
-            });
-
-            let pass3 = {}; t.roster.forEach(r => pass3[r.pid] = 0);
-            t.matches.forEach(m => {
-                const pts = getPts(Math.abs(adjStart[m.wId] - adjStart[m.lId]), adjStart[m.wId] < adjStart[m.lId]);
-                pass3[m.wId] += pts; pass3[m.lId] -= pts;
-            });
-
-            document.getElementById('matchLog').innerHTML = t.matches.slice().reverse().map(m => {
-                const p = getPts(Math.abs(adjStart[m.wId] - adjStart[m.lId]), adjStart[m.wId] < adjStart[m.lId]);
-                return `<div class="match-row"><span><strong>${t.roster.find(r=>r.pid==m.wId).name}</strong> def. ${t.roster.find(r=>r.pid==m.lId).name}</span><span class="pts-badge">${m.score} (+${p}/-${p})</span></div>`;
+            const calc = calculateUSATT(t);
+            document.getElementById('matchLog').innerHTML = t.matches.slice().reverse().map((m, idx) => {
+                const pts = getPoints(Math.abs(calc[m.wId].adj - calc[m.lId].adj), calc[m.wId].adj < calc[m.lId].adj);
+                const realIdx = t.matches.length - 1 - idx; 
+                return `
+                <div class="match-row">
+                    <div><strong>${t.roster.find(r=>r.pid==m.wId).name}</strong> def. ${t.roster.find(r=>r.pid==m.lId).name} <br>
+                    <small>${m.score} (+${pts}/-${pts})</small></div>
+                    ${isAdmin ? `<button class="btn-danger" style="padding:4px 8px; font-size:10px;" onclick="removeMatch(${realIdx})">REMOVE</button>` : ''}
+                </div>`;
             }).join('');
 
             document.querySelector('#summaryTable tbody').innerHTML = t.roster.map(r => {
-                const diff = (adjStart[r.pid] - r.initial) + pass3[r.pid];
-                return `<tr><td>${r.pid}</td><td>${r.name}</td><td>${r.initial}</td><td>${adjStart[r.pid]}</td><td style="color:${diff>=0?'green':'red'}">${diff>=0?'+':''}${diff}</td><td><strong>${adjStart[r.pid] + pass3[r.pid]}</strong></td></tr>`;
+                const c = calc[r.pid], final = c.adj + c.p3G, net = final - r.initial;
+                return `<tr><td>${r.pid}</td><td>${r.name}</td><td>${r.initial}</td><td>${c.adj}</td><td style="color:${net>=0?'green':'red'}">${net>=0?'+':''}${net}</td><td><strong>${final}</strong></td></tr>`;
             }).join('');
         }
     }
 
-    function finalizeTournament() {
-        const t = db.tournaments.find(x => x.id === currentTId);
-        if(!confirm("Finalize?")) return;
-        document.querySelectorAll('#summaryTable tbody tr').forEach(row => {
-            const pid = row.cells[0].innerText;
-            const final = parseInt(row.cells[5].innerText);
-            db.players.find(p => p.pid == pid).rating = final;
-        });
-        t.finalized = true; save(); render();
+    // --- ACTIONS ---
+    function publicRegister() {
+        const name = document.getElementById('reg-name').value.trim();
+        if(!name) return;
+        db.players.push({ pid: db.nextPid++, name, rating: 200, email: document.getElementById('reg-email').value });
+        save(); render();
     }
 
-    function openTourney(id) { currentTId = id; showView('tourney'); render(); }
-    function showView(v) { document.querySelectorAll('.view').forEach(e=>e.classList.remove('active')); document.getElementById('view-'+v).classList.add('active'); }
-    function createTournament() { const n = document.getElementById('tName').value; if(n){ db.tournaments.push({id:Date.now(), name:n, roster:[], matches:[], finalized:false}); save(); render(); } }
-    function registerPlayer() { 
-        const pid = document.getElementById('regSelect').value;
-        const t = db.tournaments.find(x=>x.id===currentTId);
-        if(!t.roster.find(r=>r.pid==pid)) { const p = db.players.find(x=>x.pid==pid); t.roster.push({pid, name:p.name, initial:p.rating}); save(); render(); }
+    function createTournament() {
+        const n = document.getElementById('tName').value, d = document.getElementById('tDate').value;
+        if(n && d){ db.tournaments.push({id:Date.now(), name:n, date:d, roster:[], matches:[], finalized:false}); save(); render(); }
     }
+
+    function registerPlayer() {
+        const pid = document.getElementById('regSelect').value, t = db.tournaments.find(x=>x.id===currentTId);
+        if(!t.roster.find(r=>r.pid==pid)) {
+            const p = db.players.find(x=>x.pid==pid);
+            t.roster.push({pid, name:p.name, initial:p.rating});
+            save(); render();
+        }
+    }
+
     function recordMatch() {
         const t = db.tournaments.find(x=>x.id===currentTId);
         t.matches.push({wId: document.getElementById('winSel').value, lId: document.getElementById('lossSel').value, score: document.getElementById('mScore').value});
         save(); render();
     }
+
+    function removeMatch(index) {
+        if(!confirm("Remove this match result? Ratings will be recalculated.")) return;
+        const t = db.tournaments.find(x => x.id === currentTId);
+        t.matches.splice(index, 1);
+        save(); render();
+    }
+
+    function finalizeTournament() {
+        if(!confirm("Push final ratings to Master List?")) return;
+        const t = db.tournaments.find(x => x.id === currentTId), calc = calculateUSATT(t);
+        t.roster.forEach(r => { db.players.find(p => p.pid == r.pid).rating = calc[r.pid].adj + calc[r.pid].p3G; });
+        t.finalized = true; save(); render();
+    }
+
+    function editRating(pid) {
+        const p = db.players.find(x => x.pid == pid), nr = prompt(`Override rating for ${p.name}:`, p.rating);
+        if (nr !== null) { p.rating = parseInt(nr); save(); render(); }
+    }
+
+    function removePlayer(pid) { if(confirm("Delete player?")) { db.players = db.players.filter(p=>p.pid!=pid); save(); render(); } }
+    function openTourney(id) { currentTId = id; showView('tourney'); render(); }
+    function showView(v) { document.querySelectorAll('.view').forEach(e=>e.classList.remove('active')); document.getElementById('view-'+v).classList.add('active'); }
     function exportDatabase() {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([JSON.stringify(db)], {type:'application/json'}));
-        a.download = 'USATT_Backup.json'; a.click();
+        a.download = `USATT_Backup_${new Date().toISOString().split('T')[0]}.json`; a.click();
     }
 
-    syncFromCloud();
-    render();
-    setInterval(syncFromCloud, 60000); 
+    initSystem();
 </script>
 </body>
 </html>
